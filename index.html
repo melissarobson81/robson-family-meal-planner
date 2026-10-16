@@ -423,6 +423,7 @@
   @media print {
     body.print-week .shelf-toolbar,
     body.print-week #historyPanel,
+    body.print-week #overviewPanel,
     body.print-week .note-shelf-wrap,
     body.print-week .panel,
     body.print-week .recipe-shelf,
@@ -982,6 +983,81 @@
 
   /* ── Drive status ── */
   #driveStatus { white-space: nowrap; }
+
+  /* ── Month overview ── */
+  .ov-grid {
+    display: grid;
+    grid-template-columns: 60px repeat(7, minmax(0,1fr));
+    gap: 3px;
+    font-size: 10px;
+  }
+  .ov-corner {}
+  .ov-day-head {
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: 4px 0;
+  }
+  .ov-meal-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .ov-cell {
+    border-radius: 5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    min-height: 52px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow .1s;
+  }
+  .ov-cell:hover { box-shadow: var(--shadow-md); }
+  .ov-cell.empty { background: transparent; border-color: var(--border); cursor: default; }
+  .ov-cell.today-col { border-color: var(--accent); }
+  .ov-cell img { width: 100%; height: 36px; object-fit: cover; flex-shrink: 0; display: block; }
+  .ov-cell-name { font-size: 8px; font-weight: 500; color: var(--text); padding: 2px 3px; line-height: 1.2; }
+  .ov-cell.note-cell { background: var(--surface); }
+  .ov-cell.note-cell .ov-cell-name { color: var(--text2); font-style: italic; }
+  .ov-week-row { display: contents; }
+  .ov-week-label {
+    grid-column: 1 / -1;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    padding: 6px 2px 2px;
+    border-top: 1px solid var(--border);
+    margin-top: 2px;
+  }
+  .ov-date-label {
+    font-size: 8px;
+    color: var(--text3);
+    text-align: center;
+    padding: 1px 0 2px;
+  }
+  .ov-goto {
+    font-size: 9px;
+    color: var(--accent);
+    text-align: center;
+    padding: 2px 0 3px;
+    font-weight: 500;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .ov-goto:hover { background: var(--accent-light); }
 </style>
 </head>
 <body>
@@ -998,6 +1074,7 @@
     <span id="driveStatus" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;"></span>
     <input type="file" id="importFile" accept=".json" style="display:none"/>
     <button id="historyBtn">📅 History</button>
+    <button id="overviewBtn">🗓 Month overview</button>
     <button id="shoppingBtn">🛒 Shopping list</button>
     <button id="printBtn">🖨 Print week</button>
     <button class="danger" id="clearBtn">🗑 Clear week</button>
@@ -1029,6 +1106,20 @@
       <div class="meal-row-label">Dinner</div>
     </div>
     <div class="week-grid" id="weekGrid" style="flex:1;margin-bottom:0;"></div>
+  </div>
+
+  <!-- Month overview panel -->
+  <div class="panel" id="overviewPanel" style="display:none">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+      <span style="font-size:14px;font-weight:600;color:var(--text);flex:1;">🗓 Month overview</span>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <button type="button" id="overviewPrev" style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">‹</button>
+        <span id="overviewLabel" style="font-size:13px;font-weight:500;color:var(--text2);white-space:nowrap;min-width:120px;text-align:center;"></span>
+        <button type="button" id="overviewNext" style="width:28px;height:28px;padding:0;display:flex;align-items:center;justify-content:center;">›</button>
+      </div>
+      <button id="overviewClose">✕ Close</button>
+    </div>
+    <div id="overviewBody"></div>
   </div>
 
   <!-- Note cards shelf -->
@@ -1439,6 +1530,11 @@ const dateStr = isoDate(dayD);
   });
 }
 
+
+  // Hide the whole row if no recipes have macro data at all
+  row.style.display = anyMacros ? 'grid' : 'none';
+}
+
 // ── Filter pills ───────────────────────────────────────────────
 function renderPills() {
   // Meal type pills
@@ -1649,6 +1745,7 @@ function openEdit(id) {
   updateImgPreview(r.img);
   editIngredients = [...(r.ingredients || [])];
   renderIngList();
+
   document.getElementById('addPanel').style.display = 'block';
   document.getElementById('cancelEditBtn').style.display = 'inline-block';
   document.getElementById('dupeRecipeBtn').style.display = 'inline-block';
@@ -1947,6 +2044,7 @@ function resetForm() {
   renderMtChecks([]);
   updateImgPreview('');
   document.getElementById('rUrl').value = '';
+
   document.getElementById('cancelEditBtn').style.display = 'none';
   document.getElementById('dupeRecipeBtn').style.display = 'none';
   document.getElementById('delRecipeBtn').style.display = 'none';
@@ -2153,6 +2251,35 @@ document.getElementById('importFile').addEventListener('change', e => {
   reader.readAsText(file);
 });
 
+
+// ── Overview events ───────────────────────────────────────────
+document.getElementById('overviewBtn').addEventListener('click', () => {
+  overviewOpen = !overviewOpen;
+  const panel = document.getElementById('overviewPanel');
+  if (overviewOpen) {
+    overviewAnchor = S.weekStart;
+    renderOverview();
+    panel.style.display = 'block';
+    panel.scrollIntoView({behavior:'smooth', block:'start'});
+  } else {
+    panel.style.display = 'none';
+  }
+});
+
+document.getElementById('overviewClose').addEventListener('click', () => {
+  overviewOpen = false;
+  document.getElementById('overviewPanel').style.display = 'none';
+});
+
+document.getElementById('overviewPrev').addEventListener('click', () => {
+  overviewAnchor = isoDate(addDays(overviewAnchor, -28));
+  renderOverview();
+});
+
+document.getElementById('overviewNext').addEventListener('click', () => {
+  overviewAnchor = isoDate(addDays(overviewAnchor, 28));
+  renderOverview();
+});
 
 // ── History events ────────────────────────────────────────────
 document.getElementById('historyBtn').addEventListener('click', () => {
@@ -2401,6 +2528,100 @@ function addNoteCard() {
   S.noteCards.push({ id, text });
   inp.value = '';
   save(); renderNoteShelf();
+}
+
+
+// ── Month Overview ─────────────────────────────────────────────
+let overviewOpen = false;
+let overviewAnchor = null; // the Monday/start of the 4-week window
+
+function renderOverview() {
+  const body = document.getElementById('overviewBody');
+  const label = document.getElementById('overviewLabel');
+  if (!body) return;
+
+  const DAY_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const FALLBACK_IMG = 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&q=60';
+
+  // Build 4 weeks starting from overviewAnchor
+  const anchor = overviewAnchor || S.weekStart;
+  const start = new Date(anchor + 'T00:00:00');
+  const end = addDays(isoDate(start), 27); // 4 weeks = 28 days
+  label.textContent = fmt(start) + ' – ' + fmt(end);
+
+  // Collect all unique start days for the 4 weeks
+  const weeks = [];
+  for (let w = 0; w < 4; w++) {
+    const ws = addDays(isoDate(start), w * 7);
+    weeks.push(ws);
+  }
+
+  // Build grid HTML
+  let html = '<div class="ov-grid">';
+
+  // Day headers (blank corner + 7 day names from first week's actual days)
+  html += '<div class="ov-corner"></div>';
+  for (let d = 0; d < 7; d++) {
+    const dayD = addDays(isoDate(start), d);
+    html += `<div class="ov-day-head">${DAY_SHORT[dayD.getDay()]}</div>`;
+  }
+
+  // Each week: 3 meal rows
+  weeks.forEach((weekStart, wi) => {
+    const weekDates = [];
+    for (let d = 0; d < 7; d++) weekDates.push(addDays(isoDate(weekStart), d));
+
+    // Week label row
+    html += `<div class="ov-week-label">Week of ${fmt(weekStart)}</div>`;
+
+    MEALS.forEach((meal, mi) => {
+      // Meal label column
+      html += `<div class="ov-meal-label">${meal}</div>`;
+
+      // 7 day cells
+      weekDates.forEach(dayD => {
+        const dateStr = isoDate(dayD);
+        const key = `${dateStr}__${meal}`;
+        const r = S.plan[key];
+        const isToday2 = isToday(dayD);
+
+        if (r) {
+          if (r._isNote) {
+            html += `<div class="ov-cell note-cell${isToday2?' today-col':''}">
+              <div class="ov-cell-name">${r._noteText}</div>
+            </div>`;
+          } else {
+            html += `<div class="ov-cell${isToday2?' today-col':''}" title="${r.name}" 
+              onclick="overviewGoToWeek('${dateStr}')">
+              <img src="${r.img}" onerror="this.src='${FALLBACK_IMG}'" draggable="false"/>
+              <div class="ov-cell-name">${r.name}</div>
+            </div>`;
+          }
+        } else {
+          html += `<div class="ov-cell empty${isToday2?' today-col':''}"></div>`;
+        }
+      });
+    });
+
+    // "Go to this week" row
+    html += `<div class="ov-corner"></div>`;
+    html += `<div style="grid-column:span 7;">
+      <div class="ov-goto" onclick="overviewGoToWeek('${isoDate(weekStart)}')">→ Plan this week</div>
+    </div>`;
+  });
+
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function overviewGoToWeek(dateStr) {
+  S.weekStart = dateStr;
+  document.getElementById('weekStart').value = dateStr;
+  recalcLastPlanned(); save(); renderGrid(); refreshShoppingList();
+  // Close overview and scroll to grid
+  overviewOpen = false;
+  document.getElementById('overviewPanel').style.display = 'none';
+  document.getElementById('weekGrid').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 // ── Auto-scroll during drag ───────────────────────────────────
